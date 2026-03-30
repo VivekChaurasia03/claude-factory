@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python pipeline_overview.py)",
+      "Bash(PYTHONIOENCODING=utf-8 python pipeline_overview.py)"
+    ]
+  }
+}

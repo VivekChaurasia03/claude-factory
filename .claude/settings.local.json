@@ -1,8 +1,22 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python pipeline_overview.py)",
-      "Bash(PYTHONIOENCODING=utf-8 python pipeline_overview.py)"
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(node --version)",
+      "Bash(python --version)",
+      "Bash(python3 --version)",
+      "Bash(docker --version)",
+      "Bash(go version)",
+      "Bash(rustc --version)",
+      "Bash(pnpm --version)",
+      "Bash(npm --version)",
+      "Bash(yarn --version)",
+      "Bash(bun --version)",
+      "Bash(uv --version)",
+      "Bash(poetry --version)",
+      "Bash(zip -r:*)",
+      "Bash(Compress-Archive:*)"
     ]
   }
 }

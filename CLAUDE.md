@@ -1,129 +1,76 @@
-# WindBorne Learning Environment — Vivek Chaurasia
+# Claude Repo Factory
 
-## Environment
-- OS: Windows 11, shell: PowerShell
-- Multi-line bash commands (with `\` continuation) do NOT work — always give single-line PowerShell commands or use PowerShell backtick (`` ` ``) continuation
-- Docker Desktop is installed and running
+This repo is a **conversation-driven project generator**. It has one purpose: when a developer is starting a new project, they run `/factory` here, Claude conducts a deep interview, and Claude itself produces a tailored project repo where Claude (running inside the *new* repo) won't hallucinate — every decision is captured, every included skill is adapted to the project, and iteration guardrails are baked into the generated `CLAUDE.md`.
 
-## Who I am
-- Incoming Backend Engineer at WindBorne Systems (Palo Alto, CA)
-- Manager: Kai Marshland (Co-Founder/CPO)
-- Background: Tesla SDE intern — asyncio + Kafka + ClickHouse pipeline (660 metrics/sec), 400+ device real-time monitoring, token race condition fix
-- Stack: Python, asyncio, FastAPI, Kafka, ClickHouse, PostgreSQL, Redis, React, Next.js, Docker, Rust (intermediate)
-
-## Purpose of this repo
-Pre-joining learning environment. Build real things to understand WindBorne's systems before day 1.
-Goal: contributing on day 1, not exploring.
+**The factory is Claude. There is no Python script, no CLI tool, no external runner.** The `library/` is a corpus Claude reads from and *adapts*. It is not a static set of files to copy.
 
 ---
 
-## How to tutor me
-- Concept first (3-5 sentences), then a small runnable exercise
-- Grug brain: simple > elegant, no unnecessary abstractions
-- Correct me immediately if I'm wrong — don't let it slide
-- Tesla analogies welcome where relevant
-- After each exercise, ask one check question before moving on
+## How to use it
 
----
+From inside this repo, in Claude Code:
 
-## Kai's rules (internalize these)
-- Grug brain: complexity is the enemy (grugbrain.dev)
-- Velocity is #1 — ship something small early
-- Never let a deadline slip silently
-- Push info proactively — don't wait to be asked
-- Local is a lie — think concurrent production instances always
-
----
-
-## WindBorne — my ownership areas
-- Stage 3: Kafka consumer → QC checks → ClickHouse (hot) + S3/NetCDF (cold)
-- Stage 5: Atlas API serves WeatherMesh forecasts to customers
-
----
-
-## Full pipeline (mental model)
 ```
-Balloon → Protobuf → Iridium satellite → HTTP endpoint
-HTTP endpoint → Kafka topic
-Kafka consumer → QC → ClickHouse (analytics) + S3/NetCDF (cold)
-WeatherMesh pulls NetCDF every 10 min → forecast
-Atlas API → energy traders, airlines, NOAA (obs only)
+/factory
 ```
 
-Live state also flows to Redis (current balloon state, O(1) reads, TTL auto-expires stale balloons)
-and Postgres (balloon registry + commands).
+The slash command instructs Claude to:
 
-## The flywheel
-Better balloons → better assimilation data → better forecasts → more customers → funds more balloons.
-Every pipeline decision either helps or hurts this.
+1. Read `decisions.schema.yaml` (the interview checklist) and `library/README.md` (the tag taxonomy).
+2. Walk the user through the interview section by section. Gate each section. When the user is unsure, surface options with pros/cons.
+3. Cross-reference earlier answers (e.g. don't ask backend questions if `role` is `frontend` only).
+4. When the interview is done, scan `library/` and decide — using judgment, not just tag matching — which agents/skills/commands belong in the output repo.
+5. **Adapt** each chosen artifact to this specific project: substitute the project's actual entity names, framework version, deploy target, file paths, and verification gates into the skill body.
+6. Write the entire output directory directly using the Write tool: `output/<project-name>/.claude/...` plus a project-specific `CLAUDE.md`, `decisions.md` snapshot, and `PREFLIGHT.md`.
+7. Run a Bash one-liner pre-flight check (`node -v`, `python --version`, `docker --version`, etc.) and surface results.
+8. Optionally zip the output: `zip -r output/<project-name>.zip output/<project-name>`.
 
----
-
-## Key technical facts
-
-### Wire & storage formats
-- Wire format: Protobuf (not JSON, not NetCDF — too heavy for Iridium)
-- Cold storage / model input: NetCDF (variables + global attributes)
-
-### ClickHouse
-- Engine: MergeTree, columnar — batch inserts are critical, avoid row-by-row writes
-
-### Kafka
-- Durable log — supports replay via consumer offset reset
-
-### QC checks
-- Plausibility, persistence, relational, spatial-temporal
-
-### Altitude
-- Lat/lon: GPS
-- Altitude: pressure sensor + barometric formula (not GPS)
-
-### WeatherMesh assimilation window
-- Every 10 minutes — missed window = stale forecast
+The user then drops the output into a fresh project, runs `claude`, and starts building. Claude reads the generated `CLAUDE.md` and is up-to-speed.
 
 ---
 
-## WeatherMesh — what it actually is
-- Transformer-based AI model (not traditional NWP/physics-based)
-- Current resolution: 0.25° global; target: arbitrary resolution (3km work ongoing)
-- Speed: ~12 seconds on a single RTX 4090 — 100,000x faster than traditional NWP
-- Accuracy: outperformed Google GraphCast by 11% on key forecasting metrics
-- Hard latency constraint: assimilates every 10 min → my pipeline must deliver inside that window
+## Repo layout
 
----
-
-## Two products, two customer types
-| Product | Who buys it | Notes |
-|---|---|---|
-| Observations API | NOAA | QC'd raw telemetry; NOAA feeds it into their own GFS model |
-| WeatherMesh forecasts | Energy traders, airlines, commercial | NOAA does NOT buy forecasts — they have their own models |
-
----
-
-## Balloon packet fields
 ```
-balloon_id, timestamp, lat, lon, altitude,
-pressure (hPa), temp (°C), humidity (%),
-battery_voltage, sequence_number
+.
+├── CLAUDE.md                       # this file
+├── .claude/
+│   ├── commands/factory.md         # the conversational /factory command
+│   └── settings.local.json
+├── decisions.schema.yaml           # interview checklist (Claude reads this; no code parses it)
+└── library/                        # corpus Claude learns from
+    ├── README.md                   # tag taxonomy + authoring guide
+    ├── agents/                     # agent definitions w/ applies_to hints
+    ├── skills/                     # skill packages w/ applies_to hints
+    ├── commands/                   # slash commands w/ applies_to hints
+    └── claude-md-templates/        # composable CLAUDE.md fragments (esp. _guardrails.md)
 ```
-Sequence gaps matter: receive 104 then 107 → 105-106 were lost → flag as missing.
 
 ---
 
-## Session tracking
-- `notes/` — one file per completed chunk (e.g. `notes/1.1.md`). Written by `/done`. This is the source of truth for what's been covered.
-- `LEARN.md` — general concepts (Kafka, ClickHouse, Protobuf, NetCDF, etc.) accumulated across sessions.
-- `WINDBORNE.md` — WindBorne-specific system notes accumulated across sessions.
-- `/start-session` reads all three before listing what's available. Completed chunks (have a notes file) are shown as DONE and skipped.
+## Iteration guardrails (baked into every generated `CLAUDE.md`)
+
+These rules MUST appear in every output project's `CLAUDE.md`. They exist to prevent hallucination:
+
+1. **Verify before next** — do not advance past a chunk until it's verified (typecheck, run, test, or render).
+2. **Small chunks** — each slice ≤ ~5 files, ~150 lines; otherwise propose the breakdown and get approval first.
+3. **No code dumps** — no multi-file scaffolding without stating intent and getting confirmation.
+4. **No hallucination** — only reference functions/files/flags that exist in the repo or are listed in the captured decisions.
+5. **Use the captured decisions** — don't introduce stacks/frameworks/databases not in the manifest.
+6. **Local is a lie — think production** — race conditions, partial failures, idempotency.
+7. **Never let a deadline slip silently** — surface delays early.
+8. **Never read `.env` / secrets** — `.env`, `.env.*`, `secrets.*`, `credentials.*`, `*.pem`, `*.key`, `id_rsa*` are off-limits. Read the `.example` instead and ask the user for real values.
+
+The full canonical text lives in `library/claude-md-templates/_guardrails.md`. Always include it (verbatim or adapted) in the generated `CLAUDE.md`.
 
 ---
 
-## Five learning tracks
+## How the library evolves
 
-| Track | Chunks |
-|---|---|
-| 1 — WindBorne architecture | 1.1 pipeline overview → 1.2 ingestion → 1.3 QC → 1.4 delivery → 1.5 Mission Control → 1.6 altitude API |
-| 2 — ClickHouse + pipeline | 2.1 install + MergeTree → 2.2 queries → 2.3 TTL/partition → 2.4 hot-region schema → 2.5 ELT pipeline [needs 5.2] |
-| 3 — MCP + agentic | 3.1 what MCP is → 3.2 build MCP server → 3.3 agentic dev → 3.4 monitoring agent [needs 2.5 + 5.3] |
-| 4 — WeatherMesh | 4.1 NWP basics → 4.2 WeatherMesh 5c → 4.3 NetCDF → 4.4 toy model |
-| 5 — Perf + reliability | 5.1 Protobuf [do before 2.5] → 5.2 observability [do before 3.4] → 5.3 resilience [needs 2.5] |
+The library is the factory's accumulated knowledge. To grow it:
+
+- Drop a new agent/skill/command into the right `library/` subdirectory.
+- Add an `applies_to:` list in its frontmatter (see `library/README.md` for tags). Treat it as a *hint* to Claude — Claude reads bodies and uses judgment when deciding inclusion.
+- Real-project feedback is the main lever: when something is missing or wrong in a generated repo, fix it in `library/` so the next generation is sharper.
+
+There is no automatic sync from external sources. Curation is intentional.

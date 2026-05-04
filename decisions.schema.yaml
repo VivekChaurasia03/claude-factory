@@ -1,0 +1,444 @@
+# decisions.schema.yaml
+# Canonical schema for the interview output. Every field here MUST be answered
+# during /factory before generation. The generator validates against this schema.
+#
+# Field types:
+#   string   — free text or one of `choices`
+#   bool     — true | false
+#   list     — array of strings (each must match `choices` if present)
+#   enum     — must be one of `choices`
+#   ref      — points to another field's value
+#
+# `tags` field on each value declares which manifest tags get added when the
+# user picks that value. The generator unions all selected tags into the final
+# tag set used for library inclusion.
+
+version: 1
+
+sections:
+
+  # ─────────────────────────────────────────────
+  # 1. Project identity
+  # ─────────────────────────────────────────────
+  project:
+    name:
+      type: string
+      required: true
+      prompt: "What is the project name? (kebab-case, e.g. `payments-api`)"
+      validate: "^[a-z][a-z0-9-]{1,63}$"
+    description:
+      type: string
+      required: true
+      prompt: "Describe the project in 1-3 sentences. What does it do? Who uses it?"
+    primary_goal:
+      type: string
+      required: true
+      prompt: "What's the #1 outcome? (e.g. ship MVP, replace legacy system, learn a stack)"
+
+  # ─────────────────────────────────────────────
+  # 2. Repo shape
+  # ─────────────────────────────────────────────
+  repo:
+    layout:
+      type: enum
+      required: true
+      prompt: "How is the repo organized?"
+      choices:
+        - value: single
+          label: "Single service / app"
+          tags: ["repo:single"]
+          pros: "Simple. One package, one CI, one deploy."
+          cons: "Hard to share code if you grow into multiple apps."
+        - value: monorepo
+          label: "Monorepo (multiple packages/apps in one repo)"
+          tags: ["repo:monorepo"]
+          pros: "Shared code, atomic cross-package changes, single CI."
+          cons: "Tooling overhead (Turborepo/Nx/pnpm workspaces). Slower for solo work."
+        - value: library
+          label: "Library / SDK / package"
+          tags: ["repo:library", "role:library"]
+          pros: "Clear publishing target. Versioned releases."
+          cons: "Need to think about API stability from day 1."
+        - value: cli
+          label: "CLI tool"
+          tags: ["repo:cli", "role:cli"]
+          pros: "Distribution is easy (npm/pip/cargo). No server."
+          cons: "UX is text-only. Distribution + auto-update is its own problem."
+    monorepo_tool:
+      type: enum
+      required_if: "repo.layout == monorepo"
+      prompt: "Which monorepo tool?"
+      choices:
+        - value: turborepo
+          label: "Turborepo"
+          tags: ["pm:pnpm"]
+          pros: "Fast, well-supported, great for JS/TS."
+          cons: "JS/TS only."
+        - value: nx
+          label: "Nx"
+          tags: []
+          pros: "Polyglot (JS/TS/Python/Go). Powerful generators."
+          cons: "Steep learning curve."
+        - value: pnpm-workspaces
+          label: "pnpm workspaces (no extra tool)"
+          tags: ["pm:pnpm"]
+          pros: "Minimal. No extra layer."
+          cons: "No task orchestration / caching."
+        - value: cargo-workspaces
+          label: "Cargo workspaces"
+          tags: ["lang:rust", "pm:cargo"]
+          pros: "Native Rust support."
+          cons: "Rust-only."
+        - value: uv-workspaces
+          label: "uv workspaces"
+          tags: ["lang:python", "pm:uv"]
+          pros: "Fast Python monorepo with shared lockfile."
+          cons: "Newer, smaller ecosystem."
+        - value: other
+          label: "Other / will configure manually"
+          tags: []
+
+  # ─────────────────────────────────────────────
+  # 3. Role(s) the codebase plays
+  # ─────────────────────────────────────────────
+  role:
+    type: list
+    required: true
+    prompt: "What does this codebase do? (pick all that apply)"
+    choices:
+      - value: backend
+        label: "Backend / API server"
+        tags: ["role:backend"]
+      - value: frontend
+        label: "Frontend / web UI"
+        tags: ["role:frontend"]
+      - value: fullstack
+        label: "Fullstack (frontend + backend in one repo)"
+        tags: ["role:fullstack", "role:frontend", "role:backend"]
+      - value: cli
+        label: "CLI tool"
+        tags: ["role:cli"]
+      - value: library
+        label: "Library / SDK"
+        tags: ["role:library"]
+      - value: data-pipeline
+        label: "Data pipeline / ETL / batch jobs"
+        tags: ["role:data-pipeline"]
+      - value: ml
+        label: "ML model / training / inference"
+        tags: ["role:ml"]
+      - value: mobile
+        label: "Mobile app"
+        tags: ["role:frontend"]
+
+  # ─────────────────────────────────────────────
+  # 4. Languages
+  # ─────────────────────────────────────────────
+  languages:
+    primary:
+      type: enum
+      required: true
+      prompt: "What is the primary language?"
+      choices:
+        - {value: python,     tags: ["lang:python"]}
+        - {value: typescript, tags: ["lang:typescript", "lang:node"]}
+        - {value: javascript, tags: ["lang:javascript", "lang:node"]}
+        - {value: go,         tags: ["lang:go"]}
+        - {value: rust,       tags: ["lang:rust"]}
+        - {value: java,       tags: ["lang:java"]}
+        - {value: kotlin,     tags: ["lang:kotlin"]}
+        - {value: swift,      tags: ["lang:swift"]}
+        - {value: csharp,     tags: ["lang:csharp"]}
+        - {value: ruby,       tags: ["lang:ruby"]}
+        - {value: php,        tags: ["lang:php"]}
+        - {value: elixir,     tags: ["lang:elixir"]}
+    secondary:
+      type: list
+      required: false
+      prompt: "Any secondary languages? (e.g. TypeScript frontend + Python backend)"
+      choices_ref: languages.primary.choices
+    runtime_version:
+      type: string
+      required: true
+      prompt: "Pin a runtime version (e.g. python 3.12, node 20, go 1.22). Will be checked in pre-flight."
+
+  # ─────────────────────────────────────────────
+  # 5. Backend stack (only if role contains backend/fullstack)
+  # ─────────────────────────────────────────────
+  backend:
+    framework:
+      type: enum
+      required_if: "role contains backend OR role contains fullstack"
+      prompt: "Backend framework?"
+      choices:
+        - {value: fastapi,     tags: ["framework:fastapi", "lang:python"], pros: "Async-native, auto OpenAPI, Pydantic.", cons: "Less batteries-included than Django."}
+        - {value: django,      tags: ["framework:django", "lang:python"], pros: "Batteries-included. ORM, admin, auth.", cons: "Sync by default. Heavier."}
+        - {value: flask,       tags: ["framework:flask", "lang:python"], pros: "Tiny. Easy to learn.", cons: "Sync. Need extensions for everything."}
+        - {value: express,     tags: ["framework:express", "lang:node"], pros: "Battle-tested. Huge ecosystem.", cons: "Unopinionated. You wire everything."}
+        - {value: nestjs,      tags: ["framework:nestjs", "lang:typescript"], pros: "Opinionated, DI, modules. Spring-like.", cons: "Lots of boilerplate."}
+        - {value: fastify,     tags: ["framework:fastify", "lang:node"], pros: "Faster than express. Schema-first.", cons: "Smaller ecosystem."}
+        - {value: hono,        tags: ["framework:hono", "lang:typescript"], pros: "Edge-runtime ready. Tiny.", cons: "Newer. Smaller ecosystem."}
+        - {value: gin,         tags: ["framework:gin", "lang:go"]}
+        - {value: echo,        tags: ["framework:echo", "lang:go"]}
+        - {value: fiber,       tags: ["framework:fiber", "lang:go"]}
+        - {value: axum,        tags: ["framework:axum", "lang:rust"]}
+        - {value: actix,       tags: ["framework:actix", "lang:rust"]}
+        - {value: spring-boot, tags: ["framework:spring-boot", "lang:java"]}
+        - {value: rails,       tags: ["framework:rails", "lang:ruby"]}
+        - {value: laravel,     tags: ["framework:laravel", "lang:php"]}
+        - {value: phoenix,     tags: ["framework:phoenix", "lang:elixir"]}
+        - {value: none,        tags: []}
+    api_style:
+      type: enum
+      required_if: "role contains backend OR role contains fullstack"
+      prompt: "API style?"
+      choices:
+        - {value: rest,    tags: ["has:api"], pros: "Universal. Easy to cache.", cons: "Verbose for nested data."}
+        - {value: graphql, tags: ["has:api"], pros: "Client picks shape. Single endpoint.", cons: "N+1 risk. Caching is hard."}
+        - {value: trpc,    tags: ["has:api", "lang:typescript"], pros: "End-to-end types in TS monorepo.", cons: "TS-only."}
+        - {value: grpc,    tags: ["has:api"], pros: "Fast, typed, streaming.", cons: "Browser support needs grpc-web."}
+        - {value: none,    tags: []}
+
+  # ─────────────────────────────────────────────
+  # 6. Frontend stack (only if role contains frontend/fullstack)
+  # ─────────────────────────────────────────────
+  frontend:
+    framework:
+      type: enum
+      required_if: "role contains frontend OR role contains fullstack"
+      prompt: "Frontend framework?"
+      choices:
+        - {value: next,         tags: ["framework:next", "lang:typescript", "lang:node"], pros: "App router, RSC, SSR, broad ecosystem.", cons: "Vendor lock to Vercel patterns."}
+        - {value: nuxt,         tags: ["framework:nuxt", "lang:typescript"]}
+        - {value: remix,        tags: ["framework:remix", "lang:typescript"]}
+        - {value: react-vite,   tags: ["framework:react", "lang:typescript"], pros: "Fast dev. SPA. Simple.", cons: "No SSR out of the box."}
+        - {value: vue,          tags: ["framework:vue", "lang:typescript"]}
+        - {value: svelte,       tags: ["framework:svelte", "lang:typescript"]}
+        - {value: sveltekit,    tags: ["framework:sveltekit", "lang:typescript"]}
+        - {value: astro,        tags: ["framework:astro", "lang:typescript"], pros: "Content sites. Islands.", cons: "Less suited for app-shaped UIs."}
+        - {value: solid,        tags: ["framework:solid", "lang:typescript"]}
+        - {value: react-native, tags: ["framework:react-native", "lang:typescript"]}
+        - {value: expo,         tags: ["framework:expo", "lang:typescript"]}
+        - {value: flutter,      tags: ["framework:flutter"]}
+        - {value: none,         tags: []}
+    styling:
+      type: enum
+      required_if: "role contains frontend OR role contains fullstack"
+      prompt: "Styling approach?"
+      choices:
+        - {value: tailwind,         pros: "Utility-first. Consistent.", cons: "Verbose markup."}
+        - {value: tailwind-shadcn,  pros: "Tailwind + shadcn/ui (copy-paste components).", cons: "Components live in your repo (own them)."}
+        - {value: css-modules}
+        - {value: styled-components}
+        - {value: vanilla-css}
+        - {value: panda-css}
+
+  # ─────────────────────────────────────────────
+  # 7. Data layer
+  # ─────────────────────────────────────────────
+  data:
+    primary_db:
+      type: enum
+      required: true
+      prompt: "Primary (transactional) database?"
+      choices:
+        - {value: postgres, tags: ["db:postgres", "has:database"], pros: "Best general-purpose. JSONB, extensions, mature.", cons: "Slightly more ops than sqlite."}
+        - {value: mysql,    tags: ["db:mysql", "has:database"]}
+        - {value: sqlite,   tags: ["db:sqlite", "has:database"], pros: "Zero ops. File-based.", cons: "Single-writer. Not for distributed apps."}
+        - {value: mongodb,  tags: ["db:mongodb", "has:database"], pros: "Schema flex.", cons: "Weaker consistency story."}
+        - {value: dynamodb, tags: ["db:dynamodb", "has:database"]}
+        - {value: none,     tags: []}
+    analytical_db:
+      type: enum
+      required: false
+      prompt: "Separate analytical/OLAP database? (most projects skip this)"
+      choices:
+        - {value: clickhouse, tags: ["db:clickhouse"]}
+        - {value: bigquery,   tags: ["db:bigquery"]}
+        - {value: snowflake,  tags: ["db:snowflake"]}
+        - {value: duckdb,     tags: ["db:duckdb"]}
+        - {value: none,       tags: []}
+    orm:
+      type: enum
+      required_if: "data.primary_db != none"
+      prompt: "ORM / query builder?"
+      choices:
+        - {value: prisma,     tags: ["orm:prisma"]}
+        - {value: drizzle,    tags: ["orm:drizzle"]}
+        - {value: sqlalchemy, tags: ["orm:sqlalchemy", "lang:python"]}
+        - {value: typeorm,    tags: ["orm:typeorm"]}
+        - {value: gorm,       tags: ["orm:gorm", "lang:go"]}
+        - {value: diesel,     tags: ["orm:diesel", "lang:rust"]}
+        - {value: raw-sql,    tags: []}
+        - {value: none,       tags: []}
+    cache:
+      type: enum
+      required: false
+      prompt: "Cache layer?"
+      choices:
+        - {value: redis,     tags: ["cache:redis"]}
+        - {value: memcached, tags: ["cache:memcached"]}
+        - {value: dragonfly, tags: ["cache:dragonfly"]}
+        - {value: none,      tags: []}
+    queue:
+      type: enum
+      required: false
+      prompt: "Message queue / event bus?"
+      choices:
+        - {value: kafka,         tags: ["queue:kafka"]}
+        - {value: rabbitmq,      tags: ["queue:rabbitmq"]}
+        - {value: sqs,           tags: ["queue:sqs"]}
+        - {value: redis-streams, tags: ["queue:redis-streams"]}
+        - {value: nats,          tags: ["queue:nats"]}
+        - {value: none,          tags: []}
+
+  # ─────────────────────────────────────────────
+  # 8. Auth
+  # ─────────────────────────────────────────────
+  auth:
+    type: enum
+    required: true
+    prompt: "Authentication strategy?"
+    choices:
+      - {value: none,          tags: []}
+      - {value: jwt,           tags: ["auth:jwt", "has:auth"], pros: "Stateless. Simple.", cons: "Can't revoke without extra infra."}
+      - {value: session,       tags: ["has:auth"], pros: "Easy to revoke.", cons: "Needs server-side store."}
+      - {value: oauth,         tags: ["auth:oauth", "has:auth"]}
+      - {value: clerk,         tags: ["auth:clerk", "has:auth"], pros: "Hosted. Fast to set up.", cons: "Vendor lock-in. Paid above free tier."}
+      - {value: auth0,         tags: ["auth:auth0", "has:auth"]}
+      - {value: supabase-auth, tags: ["auth:supabase-auth", "has:auth"]}
+      - {value: nextauth,      tags: ["auth:nextauth", "has:auth", "framework:next"]}
+      - {value: firebase-auth, tags: ["auth:firebase-auth", "has:auth"]}
+
+  # ─────────────────────────────────────────────
+  # 9. Testing
+  # ─────────────────────────────────────────────
+  testing:
+    framework:
+      type: list
+      required: true
+      prompt: "Testing frameworks? (pick all that apply)"
+      choices:
+        - {value: pytest,     tags: ["test:pytest", "has:tests"]}
+        - {value: jest,       tags: ["test:jest", "has:tests"]}
+        - {value: vitest,     tags: ["test:vitest", "has:tests"]}
+        - {value: playwright, tags: ["test:playwright", "has:tests"]}
+        - {value: cypress,    tags: ["test:cypress", "has:tests"]}
+        - {value: go-test,    tags: ["test:go-test", "has:tests"]}
+        - {value: cargo-test, tags: ["test:cargo-test", "has:tests"]}
+        - {value: junit,      tags: ["test:junit", "has:tests"]}
+        - {value: none,       tags: []}
+    coverage_target:
+      type: string
+      required: false
+      prompt: "Coverage target? (e.g. '80%' or 'critical paths only')"
+
+  # ─────────────────────────────────────────────
+  # 10. Infra & deployment
+  # ─────────────────────────────────────────────
+  infra:
+    containers:
+      type: enum
+      required: true
+      prompt: "Containerization?"
+      choices:
+        - {value: docker,         tags: ["infra:docker"]}
+        - {value: docker-compose, tags: ["infra:docker", "infra:docker-compose"]}
+        - {value: kubernetes,     tags: ["infra:docker", "infra:kubernetes"]}
+        - {value: serverless,     tags: ["infra:serverless"]}
+        - {value: none,           tags: []}
+    deployment:
+      type: enum
+      required: true
+      prompt: "Where will it be deployed?"
+      choices:
+        - {value: vercel,       tags: ["deploy:vercel"], pros: "Best for Next.js. Free tier generous.", cons: "Lock-in. Pricey at scale."}
+        - {value: netlify,      tags: ["deploy:netlify"]}
+        - {value: railway,      tags: ["deploy:railway", "deploy:free-tier"], pros: "Cheap. Postgres + service in one.", cons: "Free tier limited."}
+        - {value: fly,          tags: ["deploy:fly", "deploy:free-tier"], pros: "Globally distributed. Good free tier for small apps.", cons: "Steeper learning curve."}
+        - {value: render,       tags: ["deploy:render", "deploy:free-tier"]}
+        - {value: cloudflare,   tags: ["deploy:cloudflare"], pros: "Edge runtime. Generous free tier.", cons: "Worker limitations (no long-running)."}
+        - {value: aws,          tags: ["deploy:aws"]}
+        - {value: gcp,          tags: ["deploy:gcp"]}
+        - {value: azure,        tags: ["deploy:azure"]}
+        - {value: digitalocean, tags: ["deploy:digitalocean"]}
+        - {value: self-hosted,  tags: ["deploy:self-hosted"]}
+    free_tier_only:
+      type: bool
+      required: true
+      prompt: "Are you committed to free-tier-only? (will filter deployment options)"
+    ci:
+      type: enum
+      required: true
+      prompt: "CI provider?"
+      choices:
+        - {value: github-actions, tags: ["ci:github-actions"]}
+        - {value: gitlab,         tags: ["ci:gitlab"]}
+        - {value: circleci,       tags: ["ci:circleci"]}
+        - {value: none,           tags: []}
+
+  # ─────────────────────────────────────────────
+  # 11. Package manager
+  # ─────────────────────────────────────────────
+  package_manager:
+    type: enum
+    required: true
+    prompt: "Package manager?"
+    choices:
+      - {value: pnpm,    tags: ["pm:pnpm"]}
+      - {value: npm,     tags: ["pm:npm"]}
+      - {value: yarn,    tags: ["pm:yarn"]}
+      - {value: bun,     tags: ["pm:bun"]}
+      - {value: pip,     tags: ["pm:pip"]}
+      - {value: poetry,  tags: ["pm:poetry"]}
+      - {value: uv,      tags: ["pm:uv"]}
+      - {value: cargo,   tags: ["pm:cargo"]}
+      - {value: go-mod,  tags: ["pm:go-mod"]}
+      - {value: maven,   tags: ["pm:maven"]}
+      - {value: gradle,  tags: ["pm:gradle"]}
+
+  # ─────────────────────────────────────────────
+  # 12. Features & capabilities (free-form)
+  # ─────────────────────────────────────────────
+  features:
+    realtime:
+      type: bool
+      required: true
+      prompt: "Does the app need real-time / WebSocket / SSE?"
+      tags_if_true: ["has:realtime"]
+    background_jobs:
+      type: bool
+      required: true
+      prompt: "Background jobs / scheduled tasks?"
+      tags_if_true: ["has:background-jobs"]
+    file_uploads:
+      type: bool
+      required: true
+      prompt: "File uploads / object storage?"
+      tags_if_true: ["has:file-uploads"]
+    payments:
+      type: bool
+      required: true
+      prompt: "Payments / billing integration?"
+      tags_if_true: ["has:payments"]
+
+  # ─────────────────────────────────────────────
+  # 13. User-defined requirements (open-ended)
+  # ─────────────────────────────────────────────
+  requirements:
+    user_stories:
+      type: list
+      required: true
+      prompt: "List the top 5-10 user stories or feature requirements (one per line). What MUST this project do?"
+    non_functional:
+      type: list
+      required: false
+      prompt: "Non-functional requirements? (latency targets, scale, compliance, accessibility, i18n, etc.)"
+    out_of_scope:
+      type: list
+      required: false
+      prompt: "What is explicitly OUT of scope for v1? (helps Claude not over-build)"
+    verification_points:
+      type: list
+      required: true
+      prompt: "How will you verify each chunk is correct? (e.g. 'curl the endpoint', 'unit test passes', 'render in browser'). These become Claude's verification gates."

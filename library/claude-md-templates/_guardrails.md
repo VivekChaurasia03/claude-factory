@@ -50,7 +50,8 @@ You MUST NOT Read, Grep, or otherwise open any `.env`, `.env.*`, `*.env`, `secre
 ## How to start a session in this repo
 
 1. Read this `CLAUDE.md` end to end (you're already doing that).
-2. Check `PREFLIGHT.md` — if any tools are missing/wrong-version, install them before writing code.
-3. Look at `decisions.yaml` — that's the project contract.
-4. Pick the smallest user story from the **User stories / features** section above and propose a 1-chunk plan to ship it.
-5. After the user confirms the plan, build the chunk. Verify. Confirm. Move on.
+2. **Read `.claude/devlog/DEVLOG.md` and the last 3 entries in `.claude/devlog/chunks/`.** That tells you what's actually been built and verified. Cross-check that the files mentioned still exist before trusting the log.
+3. Check `PREFLIGHT.md` — if any tools are missing/wrong-version, install them before writing code.
+4. Look at `decisions.md` — that's the project contract.
+5. Pick the smallest user story from the **User stories / features** section above that the devlog shows is NOT yet done, and propose a 1-chunk plan to ship it.
+6. After the user confirms the plan, build the chunk. Verify. Confirm. **Write a devlog entry.** Move on.

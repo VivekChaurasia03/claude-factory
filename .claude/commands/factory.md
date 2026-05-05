@@ -98,11 +98,26 @@ output/<project-name>/
 │   ├── agents/                 # adapted agents
 │   ├── skills/<name>/SKILL.md  # adapted skills (preserve directory structure)
 │   ├── commands/               # adapted commands
-│   └── settings.local.json     # see below — MUST include the env-deny block
+│   ├── settings.local.json     # see below — MUST include the env-deny block
+│   └── devlog/
+│       ├── DEVLOG.md           # empty index file — protocol explained in CLAUDE.md
+│       └── chunks/
+│           └── .gitkeep        # so the directory survives git
 ├── CLAUDE.md                   # see below
 ├── decisions.md                # human-readable snapshot of the captured decisions + tags
 ├── PREFLIGHT.md                # results of pre-flight check (Phase 6)
 └── .gitignore                  # standard ignores (.env, node_modules, etc.)
+```
+
+The seeded `.claude/devlog/DEVLOG.md` should contain just:
+
+```markdown
+# Dev log
+
+Append-only record of completed, verified chunks. Newest first.
+See `CLAUDE.md` → "Dev log protocol" for read/write rules.
+
+_(no entries yet — the next session will add the first one after the first chunk passes verification)_
 ```
 
 ### The generated `.claude/settings.local.json` MUST contain:
@@ -143,7 +158,8 @@ Compose it in this order:
    - **Verification gates** — these are critical; print them prominently, since the guardrails reference them.
 4. **Available Claude tooling**: list the included agents, skills, commands with one-line summaries.
 5. **Manifest tags**: a code block of the sorted tag set (for traceability).
-6. **Iteration guardrails**: paste the contents of `library/claude-md-templates/_guardrails.md` verbatim. Optionally adapt the "How to start a session" section to reference this project's first user story.
+6. **Dev log protocol**: paste the contents of `library/claude-md-templates/_devlog-protocol.md` verbatim. This explains how Claude must read and append to `.claude/devlog/` across sessions.
+7. **Iteration guardrails**: paste the contents of `library/claude-md-templates/_guardrails.md` verbatim. Optionally adapt the "How to start a session" section to reference this project's first user story.
 
 ### The generated `decisions.md`
 
